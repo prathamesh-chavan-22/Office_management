@@ -177,7 +177,28 @@ const app = {
     updateUI() {
         if (!this.currentUser) return;
 
-        document.getElementById('nav-username').textContent = this.currentUser.first_name;
+        // Update navbar username (if it exists)
+        const navUsername = document.getElementById('nav-username');
+        if (navUsername) {
+            navUsername.textContent = this.currentUser.first_name;
+        }
+
+        // Update sidebar user info
+        const sidebarUsername = document.getElementById('sidebar-username');
+        const sidebarRole = document.getElementById('sidebar-role');
+        
+        if (sidebarUsername) {
+            sidebarUsername.textContent = `${this.currentUser.first_name} ${this.currentUser.last_name}`;
+        }
+        
+        if (sidebarRole) {
+            const roleLabels = {
+                'admin': 'Administrator',
+                'hr': 'HR Manager',
+                'employee': 'Employee'
+            };
+            sidebarRole.textContent = roleLabels[this.currentUser.role] || 'User';
+        }
         
         // Show/hide role-specific navigation
         if (this.currentUser.role === 'admin') {
@@ -203,6 +224,10 @@ const app = {
         // Update current time in dashboard if it exists
         const dashboardTimeElement = document.getElementById('dashboardCurrentTime');
         if (dashboardTimeElement) dashboardTimeElement.textContent = timeString;
+        
+        // Update topbar time
+        const topbarTimeElement = document.getElementById('topbar-time');
+        if (topbarTimeElement) topbarTimeElement.textContent = timeString;
         
         setTimeout(() => this.updateClock(), 1000);
     },
@@ -236,6 +261,42 @@ const app = {
         const targetSection = document.getElementById(`${sectionName}-section`);
         if (targetSection) {
             targetSection.style.display = 'block';
+        }
+
+        // Update active nav link
+        document.querySelectorAll('.nav-link').forEach(link => {
+            link.classList.remove('active');
+        });
+        
+        // Set active nav link
+        const activeLink = document.querySelector(`[onclick*="${sectionName}"]`);
+        if (activeLink) {
+            activeLink.classList.add('active');
+        }
+        
+        // Update page title
+        const pageTitles = {
+            'dashboard': 'Dashboard',
+            'attendance': 'Attendance Tracking',
+            'leaves': 'Leave Requests',
+            'payroll': 'Payroll Management',
+            'performance': 'Performance Reviews',
+            'admin': 'User Management',
+            'hr-leaves': 'Leave Management',
+            'recruitment': 'Recruitment',
+            'profile': 'Profile Settings',
+            'settings': 'System Settings',
+            'chatbot': 'AI Assistant'
+        };
+        
+        const titleElement = document.getElementById('page-title');
+        if (titleElement && pageTitles[sectionName]) {
+            titleElement.textContent = pageTitles[sectionName];
+        }
+        
+        // Close mobile sidebar if open
+        if (window.innerWidth < 992) {
+            this.closeSidebar();
         }
 
         // Load section data
@@ -272,6 +333,29 @@ const app = {
             case 'hr-leaves':
                 this.loadAllLeaves();
                 break;
+            case 'chatbot':
+                this.loadChatbot();
+                break;
+        }
+    },
+
+    toggleSidebar() {
+        const sidebar = document.getElementById('sidebar');
+        const overlay = document.getElementById('sidebarOverlay');
+        
+        if (sidebar && overlay) {
+            sidebar.classList.toggle('show');
+            overlay.classList.toggle('show');
+        }
+    },
+
+    closeSidebar() {
+        const sidebar = document.getElementById('sidebar');
+        const overlay = document.getElementById('sidebarOverlay');
+        
+        if (sidebar && overlay) {
+            sidebar.classList.remove('show');
+            overlay.classList.remove('show');
         }
     },
 
@@ -1893,4 +1977,17 @@ async function submitPayrollRecord() {
 function editPayrollRecord(payrollId) {
     // Placeholder for edit functionality
     app.showAlert('Edit functionality coming soon!', 'info');
+}
+
+// Global functions for sidebar navigation
+function toggleSidebar() {
+    app.toggleSidebar();
+}
+
+function showSection(sectionName) {
+    app.showSection(sectionName);
+}
+
+function logout() {
+    app.logout();
 }

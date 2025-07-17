@@ -142,6 +142,14 @@ The system uses SQLAlchemy models with the following key entities:
 
 ## Recent Changes
 
+### July 17, 2025 - Modern Sidebar Navigation UI
+- **UI Redesign**: Converted from top navbar to modern sidebar navigation layout
+- **Sidebar Features**: Fixed sidebar with user info, role-based navigation, and organized menu sections
+- **Responsive Design**: Mobile-friendly with hamburger menu and overlay for smaller screens
+- **Enhanced UX**: Dynamic page titles, active navigation states, and improved visual hierarchy
+- **Professional Layout**: Clean topbar with page title and current time display
+- **Better Organization**: Grouped navigation items by category (HR Management, Personal)
+
 ### July 17, 2025 - Enhanced Payroll Management System
 - **HR Payroll Management**: HR users can now create payroll records for all employees
 - **Employee Filtering**: Added dropdown to filter payroll records by specific employees
