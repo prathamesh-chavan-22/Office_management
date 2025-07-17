@@ -800,17 +800,67 @@ const app = {
     async loadPayroll() {
         try {
             this.showLoading();
+            
+            // Check if user is HR and show HR controls
+            if (this.currentUser && ['hr', 'admin'].includes(this.currentUser.role)) {
+                document.getElementById('payrollControls').style.display = 'block';
+                document.getElementById('payrollHistoryTitle').textContent = 'All Employee Payroll Records';
+                await this.loadEmployeesList();
+                this.populateYearFilter();
+            } else {
+                document.getElementById('payrollControls').style.display = 'none';
+                document.getElementById('payrollHistoryTitle').textContent = 'Payroll History';
+            }
+
             const [payrollResponse, summaryResponse] = await Promise.all([
                 axios.get(`${this.baseURL}/payroll`),
-                axios.get(`${this.baseURL}/payroll/summary`)
+                this.currentUser && this.currentUser.role === 'employee' ? 
+                    axios.get(`${this.baseURL}/payroll/summary`) : 
+                    Promise.resolve({ data: null })
             ]);
 
-            this.updatePayrollSummary(summaryResponse.data);
+            if (summaryResponse.data) {
+                this.updatePayrollSummary(summaryResponse.data);
+            }
             this.updatePayrollHistory(payrollResponse.data.payroll);
         } catch (error) {
             console.error('Error loading payroll:', error);
         } finally {
             this.hideLoading();
+        }
+    },
+
+    async loadEmployeesList() {
+        try {
+            const response = await axios.get(`${this.baseURL}/employees/list`);
+            const employees = response.data.employees;
+            
+            // Populate employee filter dropdown
+            const employeeFilter = document.getElementById('employeeFilter');
+            const payrollEmployeeId = document.getElementById('payrollEmployeeId');
+            
+            employeeFilter.innerHTML = '<option value="">All Employees</option>';
+            payrollEmployeeId.innerHTML = '<option value="">Select Employee</option>';
+            
+            employees.forEach(emp => {
+                const option1 = new Option(`${emp.name} (${emp.employee_id})`, emp.id);
+                const option2 = new Option(`${emp.name} (${emp.employee_id})`, emp.id);
+                employeeFilter.appendChild(option1);
+                payrollEmployeeId.appendChild(option2);
+            });
+        } catch (error) {
+            console.error('Error loading employees:', error);
+        }
+    },
+
+    populateYearFilter() {
+        const yearFilter = document.getElementById('yearFilter');
+        const currentYear = new Date().getFullYear();
+        
+        yearFilter.innerHTML = '<option value="">All Years</option>';
+        for (let year = currentYear; year >= currentYear - 5; year--) {
+            const option = new Option(year, year);
+            yearFilter.appendChild(option);
         }
     },
 
@@ -835,22 +885,31 @@ const app = {
             return;
         }
 
+        const isHR = this.currentUser && ['hr', 'admin'].includes(this.currentUser.role);
+        
+        let tableHeaders = `
+            <tr>
+                ${isHR ? '<th>Employee</th>' : ''}
+                <th>Period</th>
+                <th>Basic Salary</th>
+                <th>Allowances</th>
+                <th>Deductions</th>
+                <th>Net Pay</th>
+                <th>Status</th>
+                ${isHR ? '<th>Actions</th>' : ''}
+            </tr>
+        `;
+
         container.innerHTML = `
             <div class="table-responsive">
                 <table class="table table-striped">
                     <thead>
-                        <tr>
-                            <th>Period</th>
-                            <th>Basic Salary</th>
-                            <th>Allowances</th>
-                            <th>Deductions</th>
-                            <th>Net Pay</th>
-                            <th>Status</th>
-                        </tr>
+                        ${tableHeaders}
                     </thead>
                     <tbody>
                         ${payroll.map(record => `
                             <tr>
+                                ${isHR ? `<td><strong>${record.employee_name || 'Unknown'}</strong><br><small class="text-muted">${record.employee_id || ''} - ${record.department || ''}</small></td>` : ''}
                                 <td>${new Date(record.pay_period_start).toLocaleDateString()} - ${new Date(record.pay_period_end).toLocaleDateString()}</td>
                                 <td>$${record.basic_salary.toFixed(2)}</td>
                                 <td>$${record.allowances.toFixed(2)}</td>
@@ -859,12 +918,76 @@ const app = {
                                 <td>
                                     <span class="badge bg-${this.getStatusColor(record.status)}">${record.status}</span>
                                 </td>
+                                ${isHR ? `<td>
+                                    <button class="btn btn-sm btn-outline-primary" onclick="editPayrollRecord(${record.id})">
+                                        <i data-feather="edit"></i>
+                                    </button>
+                                </td>` : ''}
                             </tr>
                         `).join('')}
                     </tbody>
                 </table>
             </div>
         `;
+        
+        feather.replace();
+    },
+
+    async filterPayrollByEmployee() {
+        await this.filterPayroll();
+    },
+
+    async filterPayroll() {
+        try {
+            this.showLoading();
+            
+            const employeeId = document.getElementById('employeeFilter').value;
+            const year = document.getElementById('yearFilter').value;
+            const month = document.getElementById('monthFilter').value;
+            
+            let url = `${this.baseURL}/payroll?`;
+            const params = new URLSearchParams();
+            
+            if (employeeId) params.append('employee_id', employeeId);
+            if (year) params.append('year', year);
+            if (month) params.append('month', month);
+            
+            const response = await axios.get(`${this.baseURL}/payroll?${params.toString()}`);
+            this.updatePayrollHistory(response.data.payroll);
+        } catch (error) {
+            console.error('Error filtering payroll:', error);
+            this.showAlert('Error filtering payroll records', 'danger');
+        } finally {
+            this.hideLoading();
+        }
+    },
+
+    clearPayrollFilters() {
+        document.getElementById('employeeFilter').value = '';
+        document.getElementById('yearFilter').value = '';
+        document.getElementById('monthFilter').value = '';
+        this.loadPayroll();
+    },
+
+    async createPayrollRecord(payrollData) {
+        try {
+            this.showLoading();
+            const response = await axios.post(`${this.baseURL}/payroll`, payrollData);
+            this.showAlert('Payroll record created successfully!', 'success');
+            
+            // Hide modal and refresh payroll data
+            const modal = bootstrap.Modal.getInstance(document.getElementById('addPayrollModal'));
+            modal.hide();
+            
+            await this.loadPayroll();
+            return response.data;
+        } catch (error) {
+            console.error('Error creating payroll:', error);
+            this.showAlert(error.response?.data?.error || 'Failed to create payroll record', 'danger');
+            throw error;
+        } finally {
+            this.hideLoading();
+        }
     },
 
     async loadPerformance() {
@@ -1686,4 +1809,88 @@ function showLeaveForm() {
 // Global function to show job form (called from HTML)
 function showJobForm() {
     app.showJobForm();
+}
+
+// Global functions for payroll management (called from HTML)
+function showAddPayrollForm() {
+    const modal = new bootstrap.Modal(document.getElementById('addPayrollModal'));
+    modal.show();
+}
+
+function filterPayrollByEmployee() {
+    app.filterPayrollByEmployee();
+}
+
+function filterPayroll() {
+    app.filterPayroll();
+}
+
+function clearPayrollFilters() {
+    app.clearPayrollFilters();
+}
+
+function calculatePayroll() {
+    const basicSalary = parseFloat(document.getElementById('basicSalary').value) || 0;
+    const allowances = parseFloat(document.getElementById('allowances').value) || 0;
+    const deductions = parseFloat(document.getElementById('deductions').value) || 0;
+    const taxDeduction = parseFloat(document.getElementById('taxDeduction').value) || 0;
+    const overtimePay = parseFloat(document.getElementById('overtimePay').value) || 0;
+    
+    const grossPay = basicSalary + allowances + overtimePay;
+    const totalDeductions = deductions + taxDeduction;
+    const netPay = grossPay - totalDeductions;
+    
+    document.getElementById('grossPay').value = grossPay.toFixed(2);
+    document.getElementById('totalDeductions').value = totalDeductions.toFixed(2);
+    document.getElementById('netPay').value = netPay.toFixed(2);
+}
+
+function calculateOvertimePayroll() {
+    const overtimeHours = parseFloat(document.getElementById('overtimeHours').value) || 0;
+    const basicSalary = parseFloat(document.getElementById('basicSalary').value) || 0;
+    
+    // Calculate hourly rate (assuming 160 hours per month)
+    const hourlyRate = basicSalary / 160;
+    // Overtime rate is typically 1.5x normal rate
+    const overtimeRate = hourlyRate * 1.5;
+    const overtimePay = overtimeHours * overtimeRate;
+    
+    document.getElementById('overtimePay').value = overtimePay.toFixed(2);
+    calculatePayroll();
+}
+
+async function submitPayrollRecord() {
+    const form = document.getElementById('addPayrollForm');
+    
+    if (!form.checkValidity()) {
+        form.reportValidity();
+        return;
+    }
+    
+    const payrollData = {
+        user_id: parseInt(document.getElementById('payrollEmployeeId').value),
+        pay_period_start: document.getElementById('payPeriodStart').value,
+        pay_period_end: document.getElementById('payPeriodEnd').value,
+        basic_salary: parseFloat(document.getElementById('basicSalary').value),
+        allowances: parseFloat(document.getElementById('allowances').value) || 0,
+        deductions: parseFloat(document.getElementById('deductions').value) || 0,
+        overtime_hours: parseFloat(document.getElementById('overtimeHours').value) || 0,
+        overtime_pay: parseFloat(document.getElementById('overtimePay').value) || 0,
+        tax_deduction: parseFloat(document.getElementById('taxDeduction').value) || 0,
+        status: document.getElementById('payrollStatus').value
+    };
+    
+    try {
+        await app.createPayrollRecord(payrollData);
+        // Clear form
+        form.reset();
+        calculatePayroll();
+    } catch (error) {
+        console.error('Error submitting payroll:', error);
+    }
+}
+
+function editPayrollRecord(payrollId) {
+    // Placeholder for edit functionality
+    app.showAlert('Edit functionality coming soon!', 'info');
 }

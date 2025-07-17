@@ -142,6 +142,17 @@ The system uses SQLAlchemy models with the following key entities:
 
 ## Recent Changes
 
+### July 17, 2025 - Enhanced Payroll Management System
+- **HR Payroll Management**: HR users can now create payroll records for all employees
+- **Employee Filtering**: Added dropdown to filter payroll records by specific employees
+- **Date Filtering**: Added year and month filters for payroll history
+- **Comprehensive Form**: New payroll creation form with automatic calculations
+- **Overtime Calculation**: Automatic overtime pay calculation at 1.5x hourly rate
+- **Role-based Access**: Employees can only view their own payroll, HR sees all
+- **Real-time Calculations**: Gross pay, deductions, and net pay calculated automatically
+- **Enhanced UI**: Improved payroll table with employee information for HR view
+- **API Enhancements**: New endpoints for creating/updating payroll and listing employees
+
 ### July 16, 2025 - HR Leave Management System
 - **HR Account Created**: Added HR user account (hr1/hr123) with leave management privileges
 - **Leave Approval System**: HR can now approve/reject leave requests with one-click actions

@@ -1,0 +1,40 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15
+    container_name: hr-postgres
+    environment:
+      POSTGRES_DB: hr_database
+      POSTGRES_USER: hr_user
+      POSTGRES_PASSWORD: hr_password
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U hr_user -d hr_database"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # HR Management Application
+  hr-app:
+    build: .
+    container_name: hr-management-app
+    ports:
+      - "5000:5000"
+    environment:
+      - DATABASE_URL=postgresql://hr_user:hr_password@postgres:5432/hr_database
+      - SESSION_SECRET=docker-session-secret-key
+      - JWT_SECRET_KEY=docker-jwt-secret-key
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - .:/app
+    command: gunicorn --bind 0.0.0.0:5000 --reload main:app
+
+volumes:
+  postgres_data:
