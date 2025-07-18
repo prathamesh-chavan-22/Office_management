@@ -181,7 +181,7 @@ class Announcement(db.Model):
             'title': self.title,
             'content': self.content,
             'author_id': self.author_id,
-            'author_name': f"{self.author.first_name} {self.author.last_name}",
+            'author_name': f"{self.author.first_name} {self.author.last_name}" if self.author else "Unknown",
             'priority': self.priority,
             'is_active': self.is_active,
             'expires_at': self.expires_at.isoformat() if self.expires_at else None,
@@ -320,7 +320,7 @@ class Ticket(db.Model):
             'category': self.category,
             'status': self.status,
             'created_by': self.created_by,
-            'creator_name': f"{self.creator.first_name} {self.creator.last_name}",
+            'creator_name': f"{self.creator.first_name} {self.creator.last_name}" if self.creator else "Unknown",
             'assigned_to': self.assigned_to,
             'assignee_name': f"{self.assignee.first_name} {self.assignee.last_name}" if self.assignee else None,
             'attachment_path': self.attachment_path,
@@ -345,7 +345,7 @@ class TicketComment(db.Model):
             'id': self.id,
             'ticket_id': self.ticket_id,
             'user_id': self.user_id,
-            'author_name': f"{self.author.first_name} {self.author.last_name}",
+            'author_name': f"{self.author.first_name} {self.author.last_name}" if self.author else "Unknown",
             'comment_text': self.comment_text,
             'created_at': self.created_at.isoformat()
         }

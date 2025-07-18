@@ -49,10 +49,11 @@ def create_ticket():
         if 'attachment' in request.files:
             file = request.files['attachment']
             if file and file.filename != '':
+                # Check file size first (security improvement)
+                if request.content_length and request.content_length > MAX_FILE_SIZE:
+                    return jsonify({'error': 'File too large. Maximum size is 16MB'}), 400
+                
                 if allowed_file(file.filename, ALLOWED_EXTENSIONS):
-                    # Check file size
-                    if request.content_length > MAX_FILE_SIZE:
-                        return jsonify({'error': 'File too large. Maximum size is 16MB'}), 400
                     
                     # Generate unique filename
                     filename = secure_filename(file.filename)

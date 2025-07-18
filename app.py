@@ -58,6 +58,13 @@ def create_app():
     def index():
         return render_template('index.html')
     
+    # Global error handlers
+    @app.errorhandler(400)
+    def bad_request(error):
+        if 'JSON' in str(error.description):
+            return jsonify({'error': 'Invalid JSON format in request body'}), 400
+        return jsonify({'error': 'Bad request'}), 400
+
     with app.app_context():
         # Import models to ensure tables are created
         import models

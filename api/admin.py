@@ -17,12 +17,12 @@ def get_all_users():
         if not user or user.role not in ['hr', 'admin']:
             return jsonify({'error': 'Access denied'}), 403
         
-        # Get query parameters
+        # Get query parameters with validation
         department = request.args.get('department')
         role = request.args.get('role')
         is_active = request.args.get('is_active')
-        page = int(request.args.get('page', 1))
-        per_page = int(request.args.get('per_page', 10))
+        page = max(1, int(request.args.get('page', 1)))
+        per_page = max(1, min(100, int(request.args.get('per_page', 10))))
         
         # Build query
         query = User.query
@@ -64,6 +64,9 @@ def create_user():
             return jsonify({'error': 'Access denied'}), 403
         
         data = request.get_json()
+        if not data:
+            return jsonify({'error': 'Request body must be valid JSON'}), 400
+            
         required_fields = ['username', 'email', 'password', 'first_name', 'last_name', 'employee_id']
         
         for field in required_fields:

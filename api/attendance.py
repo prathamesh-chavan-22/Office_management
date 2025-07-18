@@ -16,11 +16,15 @@ def get_attendance():
         if not user:
             return jsonify({'error': 'User not found'}), 404
         
-        # Get query parameters
+        # Get query parameters with validation
         date_from = request.args.get('date_from')
         date_to = request.args.get('date_to')
-        page = int(request.args.get('page', 1))
-        per_page = int(request.args.get('per_page', 10))
+        
+        try:
+            page = max(1, int(request.args.get('page', 1)))
+            per_page = max(1, min(100, int(request.args.get('per_page', 10))))
+        except ValueError:
+            return jsonify({'error': 'Invalid page or per_page parameter'}), 400
         
         # Build query
         query = Attendance.query.filter_by(user_id=current_user_id)

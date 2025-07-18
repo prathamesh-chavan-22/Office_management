@@ -59,11 +59,19 @@ def create_announcement():
             return jsonify({'error': 'Access denied. Only HR/Admin can create announcements'}), 403
         
         data = request.get_json()
+        if not data:
+            return jsonify({'error': 'Request body must be valid JSON'}), 400
+            
         required_fields = ['title', 'content']
         
         for field in required_fields:
             if not data.get(field):
                 return jsonify({'error': f'{field} is required'}), 400
+                
+        # Basic XSS protection - strip HTML tags from title and content
+        import re
+        data['title'] = re.sub(r'<[^>]*>', '', str(data['title']))
+        data['content'] = re.sub(r'<[^>]*>', '', str(data['content']))
         
         # Parse expiration date if provided
         expires_at = None
@@ -88,6 +96,7 @@ def create_announcement():
         return jsonify(announcement.to_dict()), 201
     
     except Exception as e:
+        db.session.rollback()
         logging.error(f"Create announcement error: {str(e)}")
         return jsonify({'error': 'Internal server error'}), 500
 

@@ -16,10 +16,14 @@ def get_leaves():
         if not user:
             return jsonify({'error': 'User not found'}), 404
         
-        # Get query parameters
+        # Get query parameters with validation
         status = request.args.get('status')
-        page = int(request.args.get('page', 1))
-        per_page = int(request.args.get('per_page', 10))
+        
+        try:
+            page = max(1, int(request.args.get('page', 1)))
+            per_page = max(1, min(100, int(request.args.get('per_page', 10))))
+        except ValueError:
+            return jsonify({'error': 'Invalid page or per_page parameter'}), 400
         
         # Build query - HR/Admin see all leaves, others see only their own
         if user.role in ['hr', 'admin']:
@@ -40,13 +44,22 @@ def get_leaves():
         for leave in leaves.items:
             leave_dict = leave.to_dict()
             if user.role in ['hr', 'admin']:
-                leave_dict['user'] = {
-                    'id': leave.user.id,
-                    'first_name': leave.user.first_name,
-                    'last_name': leave.user.last_name,
-                    'department': leave.user.department,
-                    'position': leave.user.position
-                }
+                if leave.user:
+                    leave_dict['user'] = {
+                        'id': leave.user.id,
+                        'first_name': leave.user.first_name,
+                        'last_name': leave.user.last_name,
+                        'department': leave.user.department,
+                        'position': leave.user.position
+                    }
+                else:
+                    leave_dict['user'] = {
+                        'id': None,
+                        'first_name': 'Unknown',
+                        'last_name': 'User',
+                        'department': 'N/A',
+                        'position': 'N/A'
+                    }
             leaves_data.append(leave_dict)
         
         return jsonify({
@@ -71,7 +84,14 @@ def create_leave_request():
         if not user:
             return jsonify({'error': 'User not found'}), 404
         
-        data = request.get_json()
+        try:
+            data = request.get_json(force=True)
+        except Exception:
+            return jsonify({'error': 'Request body must be valid JSON'}), 400
+            
+        if not data:
+            return jsonify({'error': 'Request body must be valid JSON'}), 400
+            
         required_fields = ['leave_type', 'start_date', 'end_date', 'reason']
         
         for field in required_fields:
@@ -88,8 +108,17 @@ def create_leave_request():
         if start_date > end_date:
             return jsonify({'error': 'Start date must be before end date'}), 400
         
-        # Calculate days requested
+        # Validate reasonable date range (max 1 year)
         days_requested = (end_date - start_date).days + 1
+        if days_requested > 365:
+            return jsonify({'error': 'Leave request cannot exceed 365 days'}), 400
+        
+        # Validate dates are not too far in the past or future
+        today = datetime.now().date()
+        if start_date < today.replace(year=today.year - 1):
+            return jsonify({'error': 'Start date cannot be more than 1 year in the past'}), 400
+        if end_date > today.replace(year=today.year + 2):
+            return jsonify({'error': 'End date cannot be more than 2 years in the future'}), 400
         
         # Create leave request
         leave = Leave(
@@ -107,6 +136,7 @@ def create_leave_request():
         return jsonify(leave.to_dict()), 201
     
     except Exception as e:
+        db.session.rollback()
         logging.error(f"Create leave request error: {str(e)}")
         return jsonify({'error': 'Internal server error'}), 500
 

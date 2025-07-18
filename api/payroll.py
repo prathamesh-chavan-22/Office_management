@@ -3,6 +3,7 @@ from flask_jwt_extended import jwt_required, get_jwt_identity
 from models import User, Payroll
 from app import db
 from datetime import datetime
+from sqlalchemy import func
 from api import api_bp
 import logging
 
@@ -16,18 +17,25 @@ def get_payroll():
         if not user:
             return jsonify({'error': 'User not found'}), 404
         
-        # Get query parameters
+        # Get query parameters with validation
         year = request.args.get('year')
         month = request.args.get('month')
         employee_id = request.args.get('employee_id')  # For HR to filter by employee
-        page = int(request.args.get('page', 1))
-        per_page = int(request.args.get('per_page', 10))
+        
+        try:
+            page = max(1, int(request.args.get('page', 1)))
+            per_page = max(1, min(100, int(request.args.get('per_page', 10))))
+        except ValueError:
+            return jsonify({'error': 'Invalid page or per_page parameter'}), 400
         
         # Build query based on user role
         if user.role in ['hr', 'admin']:
             # HR can view all payroll records
             if employee_id:
-                query = Payroll.query.filter_by(user_id=int(employee_id))
+                try:
+                    query = Payroll.query.filter_by(user_id=int(employee_id))
+                except ValueError:
+                    return jsonify({'error': 'Invalid employee_id parameter'}), 400
             else:
                 query = Payroll.query
         else:
@@ -35,10 +43,22 @@ def get_payroll():
             query = Payroll.query.filter_by(user_id=current_user_id)
         
         if year:
-            query = query.filter(db.extract('year', Payroll.pay_period_start) == int(year))
+            try:
+                year_int = int(year)
+                if year_int < 1900 or year_int > 2100:
+                    return jsonify({'error': 'Invalid year parameter'}), 400
+                query = query.filter(func.extract('year', Payroll.pay_period_start) == year_int)
+            except ValueError:
+                return jsonify({'error': 'Invalid year parameter'}), 400
         
         if month:
-            query = query.filter(db.extract('month', Payroll.pay_period_start) == int(month))
+            try:
+                month_int = int(month)
+                if month_int < 1 or month_int > 12:
+                    return jsonify({'error': 'Invalid month parameter'}), 400
+                query = query.filter(func.extract('month', Payroll.pay_period_start) == month_int)
+            except ValueError:
+                return jsonify({'error': 'Invalid month parameter'}), 400
         
         # Get paginated results
         payroll_records = query.order_by(Payroll.pay_period_start.desc()).paginate(
@@ -51,9 +71,14 @@ def get_payroll():
             record_dict = record.to_dict()
             if user.role in ['hr', 'admin']:
                 employee = User.query.get(record.user_id)
-                record_dict['employee_name'] = f"{employee.first_name} {employee.last_name}"
-                record_dict['employee_id'] = employee.employee_id
-                record_dict['department'] = employee.department
+                if employee:
+                    record_dict['employee_name'] = f"{employee.first_name} {employee.last_name}"
+                    record_dict['employee_id'] = employee.employee_id
+                    record_dict['department'] = employee.department
+                else:
+                    record_dict['employee_name'] = "Unknown Employee"
+                    record_dict['employee_id'] = "N/A"
+                    record_dict['department'] = "N/A"
             payroll_data.append(record_dict)
         
         return jsonify({

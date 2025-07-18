@@ -6,11 +6,21 @@ const app = {
     timerInterval: null,
     currentAttendance: null,
     
+    // HTML escaping function to prevent XSS
+    escapeHtml(text) {
+        if (!text) return '';
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    },
+    
     init() {
         this.setupAxiosInterceptors();
         this.checkAuth();
         this.updateClock();
         this.setupEventListeners();
+        // Initialize dashboard as active section
+        this.showSection('dashboard');
     },
 
     setupAxiosInterceptors() {
@@ -255,12 +265,16 @@ const app = {
         // Hide all sections
         document.querySelectorAll('.section').forEach(section => {
             section.style.display = 'none';
+            section.classList.remove('active');
         });
 
         // Show selected section
         const targetSection = document.getElementById(`${sectionName}-section`);
         if (targetSection) {
             targetSection.style.display = 'block';
+            targetSection.classList.add('active');
+        } else {
+            console.warn(`Section ${sectionName}-section not found`);
         }
 
         // Update active nav link
@@ -269,7 +283,7 @@ const app = {
         });
         
         // Set active nav link
-        const activeLink = document.querySelector(`[onclick*="${sectionName}"]`);
+        const activeLink = document.querySelector(`[onclick*="showSection('${sectionName}')"]`);
         if (activeLink) {
             activeLink.classList.add('active');
         }
@@ -493,10 +507,10 @@ const app = {
         container.innerHTML = announcements.map(announcement => `
             <div class="card mb-2">
                 <div class="card-body">
-                    <h6 class="card-title">${announcement.title}</h6>
-                    <p class="card-text">${announcement.content}</p>
+                    <h6 class="card-title">${this.escapeHtml(announcement.title)}</h6>
+                    <p class="card-text">${this.escapeHtml(announcement.content)}</p>
                     <small class="text-muted">
-                        By ${announcement.author_name} on ${new Date(announcement.created_at).toLocaleDateString()}
+                        By ${this.escapeHtml(announcement.author_name)} on ${new Date(announcement.created_at).toLocaleDateString()}
                     </small>
                 </div>
             </div>
@@ -1291,7 +1305,7 @@ const app = {
         
         messageDiv.innerHTML = `
             <div class="d-inline-block p-2 rounded ${sender === 'user' ? 'bg-primary text-white' : 'bg-light'}">
-                ${message}
+                ${this.escapeHtml(message)}
             </div>
             <div class="small text-muted mt-1">
                 ${new Date().toLocaleTimeString()}
@@ -1979,8 +1993,17 @@ async function submitPayrollRecord() {
 }
 
 function editPayrollRecord(payrollId) {
-    // Placeholder for edit functionality
-    app.showAlert('Edit functionality coming soon!', 'info');
+    // Show edit modal with current data
+    axios.get(`${app.baseURL}/payroll/${payrollId}`)
+        .then(response => {
+            const record = response.data;
+            // For now, show a comprehensive modal with the data
+            app.showAlert(`Payroll Record #${payrollId}:\nEmployee: ${record.employee_name || 'N/A'}\nNet Pay: $${record.net_pay}\nStatus: ${record.status}\n\n[Edit modal implementation needed]`, 'info');
+        })
+        .catch(error => {
+            console.error('Error loading payroll record:', error);
+            app.showAlert('Error loading payroll record for editing', 'danger');
+        });
 }
 
 // Global functions for sidebar navigation
