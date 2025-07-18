@@ -281,6 +281,7 @@ const app = {
             'leaves': 'Leave Requests',
             'payroll': 'Payroll Management',
             'performance': 'Performance Reviews',
+            'tickets': 'Support Tickets',
             'admin': 'User Management',
             'hr-leaves': 'Leave Management',
             'recruitment': 'Recruitment',
@@ -335,6 +336,9 @@ const app = {
                 break;
             case 'chatbot':
                 this.loadChatbot();
+                break;
+            case 'tickets':
+                loadTicketData();
                 break;
         }
     },
@@ -1990,4 +1994,423 @@ function showSection(sectionName) {
 
 function logout() {
     app.logout();
+}
+
+// Ticket Management Functions
+let ticketCategories = [];
+let allTickets = [];
+let currentTicketFilters = {
+    status: '',
+    category: '',
+    priority: '',
+    created_by: '',
+    assigned_to: ''
+};
+
+async function loadTicketData() {
+    try {
+        // Load categories
+        const categoriesResponse = await axios.get(`${app.baseURL}/tickets/categories/`);
+        ticketCategories = categoriesResponse.data.categories;
+        
+        // Populate category dropdowns
+        const categorySelects = ['ticketCategory', 'ticketCategoryFilter'];
+        categorySelects.forEach(selectId => {
+            const select = document.getElementById(selectId);
+            if (select) {
+                // Clear existing options (except first one for filter)
+                if (selectId === 'ticketCategoryFilter') {
+                    select.innerHTML = '<option value="">All Categories</option>';
+                } else {
+                    select.innerHTML = '<option value="">Select Category</option>';
+                }
+                
+                // Add categories
+                ticketCategories.forEach(category => {
+                    const option = document.createElement('option');
+                    option.value = category;
+                    option.textContent = category;
+                    select.appendChild(option);
+                });
+            }
+        });
+        
+        // Load tickets
+        await loadTickets();
+        
+        // Load ticket stats for HR/Admin
+        if (app.currentUser && (app.currentUser.role === 'hr' || app.currentUser.role === 'admin')) {
+            await loadTicketStats();
+        }
+        
+    } catch (error) {
+        console.error('Error loading ticket data:', error);
+        app.showAlert('Error loading ticket data', 'error');
+    }
+}
+
+async function loadTickets() {
+    try {
+        const params = new URLSearchParams(currentTicketFilters);
+        const response = await axios.get(`${app.baseURL}/tickets/?${params}`);
+        allTickets = response.data;
+        displayTickets(allTickets);
+    } catch (error) {
+        console.error('Error loading tickets:', error);
+        document.getElementById('ticketsList').innerHTML = `
+            <div class="text-center text-muted">
+                <i data-feather="alert-circle"></i>
+                <p>Error loading tickets</p>
+            </div>
+        `;
+    }
+}
+
+async function loadTicketStats() {
+    try {
+        const response = await axios.get(`${app.baseURL}/tickets/stats/`);
+        const stats = response.data;
+        
+        // Update stats display
+        document.getElementById('totalTickets').textContent = stats.total_tickets;
+        document.getElementById('openTickets').textContent = stats.open_tickets;
+        document.getElementById('urgentTickets').textContent = stats.urgent_tickets;
+        document.getElementById('unassignedTickets').textContent = stats.unassigned_tickets;
+        
+    } catch (error) {
+        console.error('Error loading ticket stats:', error);
+    }
+}
+
+function displayTickets(tickets) {
+    const ticketsList = document.getElementById('ticketsList');
+    
+    if (tickets.length === 0) {
+        ticketsList.innerHTML = `
+            <div class="text-center text-muted">
+                <i data-feather="inbox"></i>
+                <p>No tickets found</p>
+            </div>
+        `;
+        feather.replace();
+        return;
+    }
+    
+    let html = '';
+    tickets.forEach(ticket => {
+        const priorityClass = {
+            'low': 'success',
+            'medium': 'warning',
+            'high': 'danger',
+            'urgent': 'danger'
+        }[ticket.priority] || 'secondary';
+        
+        const statusClass = {
+            'open': 'primary',
+            'in_progress': 'warning',
+            'closed': 'success'
+        }[ticket.status] || 'secondary';
+        
+        html += `
+            <div class="ticket-item border-bottom pb-3 mb-3">
+                <div class="row align-items-center">
+                    <div class="col-md-8">
+                        <h6 class="mb-1">
+                            <a href="#" onclick="viewTicketDetails(${ticket.id})" class="text-decoration-none">
+                                #${ticket.id} - ${ticket.title}
+                            </a>
+                        </h6>
+                        <p class="text-muted mb-2">${ticket.description.substring(0, 100)}${ticket.description.length > 100 ? '...' : ''}</p>
+                        <div class="d-flex gap-2 flex-wrap">
+                            <span class="badge bg-${priorityClass}">${ticket.priority.charAt(0).toUpperCase() + ticket.priority.slice(1)}</span>
+                            <span class="badge bg-${statusClass}">${ticket.status.replace('_', ' ').charAt(0).toUpperCase() + ticket.status.replace('_', ' ').slice(1)}</span>
+                            <span class="badge bg-secondary">${ticket.category}</span>
+                            ${ticket.attachment_name ? '<span class="badge bg-info"><i data-feather="paperclip"></i> Attachment</span>' : ''}
+                        </div>
+                    </div>
+                    <div class="col-md-4 text-md-end">
+                        <small class="text-muted d-block">Created by: ${ticket.creator_name}</small>
+                        ${ticket.assignee_name ? `<small class="text-muted d-block">Assigned to: ${ticket.assignee_name}</small>` : ''}
+                        <small class="text-muted d-block">${new Date(ticket.created_at).toLocaleDateString()}</small>
+                        <small class="text-muted">${ticket.comments_count} comments</small>
+                    </div>
+                </div>
+            </div>
+        `;
+    });
+    
+    ticketsList.innerHTML = html;
+    feather.replace();
+}
+
+function showCreateTicketModal() {
+    const modal = new bootstrap.Modal(document.getElementById('createTicketModal'));
+    document.getElementById('createTicketForm').reset();
+    modal.show();
+}
+
+async function createTicket() {
+    const form = document.getElementById('createTicketForm');
+    
+    if (!form.checkValidity()) {
+        form.reportValidity();
+        return;
+    }
+    
+    const formData = new FormData();
+    formData.append('title', document.getElementById('ticketTitle').value);
+    formData.append('description', document.getElementById('ticketDescription').value);
+    formData.append('category', document.getElementById('ticketCategory').value);
+    formData.append('priority', document.getElementById('ticketPriority').value);
+    
+    const fileInput = document.getElementById('ticketAttachment');
+    if (fileInput.files.length > 0) {
+        formData.append('attachment', fileInput.files[0]);
+    }
+    
+    try {
+        const response = await axios.post(`${app.baseURL}/tickets/`, formData, {
+            headers: {
+                'Content-Type': 'multipart/form-data'
+            }
+        });
+        
+        app.showAlert('Ticket created successfully!', 'success');
+        
+        // Close modal
+        const modal = bootstrap.Modal.getInstance(document.getElementById('createTicketModal'));
+        modal.hide();
+        
+        // Reload tickets
+        await loadTickets();
+        
+    } catch (error) {
+        console.error('Error creating ticket:', error);
+        app.showAlert(error.response?.data?.error || 'Error creating ticket', 'error');
+    }
+}
+
+async function viewTicketDetails(ticketId) {
+    try {
+        const response = await axios.get(`${app.baseURL}/tickets/${ticketId}/`);
+        const ticket = response.data;
+        
+        // Update modal title
+        document.getElementById('ticketDetailsTitle').textContent = `#${ticket.id} - ${ticket.title}`;
+        
+        // Build ticket details HTML
+        const priorityClass = {
+            'low': 'success',
+            'medium': 'warning',
+            'high': 'danger',
+            'urgent': 'danger'
+        }[ticket.priority] || 'secondary';
+        
+        const statusClass = {
+            'open': 'primary',
+            'in_progress': 'warning',
+            'closed': 'success'
+        }[ticket.status] || 'secondary';
+        
+        let detailsHtml = `
+            <div class="row mb-4">
+                <div class="col-md-6">
+                    <h6>Status</h6>
+                    <span class="badge bg-${statusClass} mb-2">${ticket.status.replace('_', ' ').charAt(0).toUpperCase() + ticket.status.replace('_', ' ').slice(1)}</span>
+                </div>
+                <div class="col-md-6">
+                    <h6>Priority</h6>
+                    <span class="badge bg-${priorityClass} mb-2">${ticket.priority.charAt(0).toUpperCase() + ticket.priority.slice(1)}</span>
+                </div>
+            </div>
+            
+            <div class="row mb-4">
+                <div class="col-md-6">
+                    <h6>Category</h6>
+                    <p>${ticket.category}</p>
+                </div>
+                <div class="col-md-6">
+                    <h6>Created By</h6>
+                    <p>${ticket.creator_name}</p>
+                </div>
+            </div>
+            
+            ${ticket.assignee_name ? `
+                <div class="row mb-4">
+                    <div class="col-md-6">
+                        <h6>Assigned To</h6>
+                        <p>${ticket.assignee_name}</p>
+                    </div>
+                </div>
+            ` : ''}
+            
+            <div class="mb-4">
+                <h6>Description</h6>
+                <p>${ticket.description}</p>
+            </div>
+            
+            ${ticket.attachment_name ? `
+                <div class="mb-4">
+                    <h6>Attachment</h6>
+                    <p>
+                        <a href="${app.baseURL}/tickets/${ticket.id}/download/" class="btn btn-sm btn-outline-primary">
+                            <i data-feather="download"></i> ${ticket.attachment_name}
+                        </a>
+                    </p>
+                </div>
+            ` : ''}
+            
+            <div class="mb-4">
+                <h6>Comments Timeline</h6>
+                <div class="timeline">
+        `;
+        
+        // Add comments
+        if (ticket.comments && ticket.comments.length > 0) {
+            ticket.comments.forEach(comment => {
+                detailsHtml += `
+                    <div class="timeline-item">
+                        <div class="timeline-content">
+                            <div class="d-flex justify-content-between">
+                                <strong>${comment.author_name}</strong>
+                                <small class="text-muted">${new Date(comment.created_at).toLocaleString()}</small>
+                            </div>
+                            <p class="mt-2 mb-0">${comment.comment_text}</p>
+                        </div>
+                    </div>
+                `;
+            });
+        } else {
+            detailsHtml += '<p class="text-muted">No comments yet</p>';
+        }
+        
+        detailsHtml += `
+                </div>
+            </div>
+            
+            <div class="mb-3">
+                <h6>Add Comment</h6>
+                <div class="input-group">
+                    <textarea class="form-control" id="newComment" placeholder="Enter your comment..." rows="3"></textarea>
+                </div>
+                <button class="btn btn-primary mt-2" onclick="addComment(${ticket.id})">
+                    <i data-feather="message-circle"></i> Add Comment
+                </button>
+            </div>
+        `;
+        
+        // Add update controls for HR/Admin
+        if (app.currentUser && (app.currentUser.role === 'hr' || app.currentUser.role === 'admin')) {
+            detailsHtml += `
+                <div class="mt-4 pt-3 border-top">
+                    <h6>Update Ticket (HR/Admin)</h6>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <select class="form-select mb-2" id="updateStatus">
+                                <option value="open" ${ticket.status === 'open' ? 'selected' : ''}>Open</option>
+                                <option value="in_progress" ${ticket.status === 'in_progress' ? 'selected' : ''}>In Progress</option>
+                                <option value="closed" ${ticket.status === 'closed' ? 'selected' : ''}>Closed</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <select class="form-select mb-2" id="updatePriority">
+                                <option value="low" ${ticket.priority === 'low' ? 'selected' : ''}>Low</option>
+                                <option value="medium" ${ticket.priority === 'medium' ? 'selected' : ''}>Medium</option>
+                                <option value="high" ${ticket.priority === 'high' ? 'selected' : ''}>High</option>
+                                <option value="urgent" ${ticket.priority === 'urgent' ? 'selected' : ''}>Urgent</option>
+                            </select>
+                        </div>
+                    </div>
+                    <button class="btn btn-warning" onclick="updateTicket(${ticket.id})">
+                        <i data-feather="edit"></i> Update Ticket
+                    </button>
+                </div>
+            `;
+        }
+        
+        document.getElementById('ticketDetailsContent').innerHTML = detailsHtml;
+        
+        // Show modal
+        const modal = new bootstrap.Modal(document.getElementById('ticketDetailsModal'));
+        modal.show();
+        
+        // Replace feather icons
+        feather.replace();
+        
+    } catch (error) {
+        console.error('Error loading ticket details:', error);
+        app.showAlert('Error loading ticket details', 'error');
+    }
+}
+
+async function addComment(ticketId) {
+    const commentText = document.getElementById('newComment').value.trim();
+    
+    if (!commentText) {
+        app.showAlert('Please enter a comment', 'warning');
+        return;
+    }
+    
+    try {
+        await axios.post(`${app.baseURL}/tickets/${ticketId}/comments/`, {
+            comment_text: commentText
+        });
+        
+        app.showAlert('Comment added successfully!', 'success');
+        
+        // Reload ticket details
+        await viewTicketDetails(ticketId);
+        
+    } catch (error) {
+        console.error('Error adding comment:', error);
+        app.showAlert(error.response?.data?.error || 'Error adding comment', 'error');
+    }
+}
+
+async function updateTicket(ticketId) {
+    const status = document.getElementById('updateStatus').value;
+    const priority = document.getElementById('updatePriority').value;
+    
+    try {
+        await axios.patch(`${app.baseURL}/tickets/${ticketId}/`, {
+            status: status,
+            priority: priority
+        });
+        
+        app.showAlert('Ticket updated successfully!', 'success');
+        
+        // Reload ticket details
+        await viewTicketDetails(ticketId);
+        
+        // Reload tickets list
+        await loadTickets();
+        
+    } catch (error) {
+        console.error('Error updating ticket:', error);
+        app.showAlert(error.response?.data?.error || 'Error updating ticket', 'error');
+    }
+}
+
+function filterTickets() {
+    currentTicketFilters.status = document.getElementById('ticketStatusFilter').value;
+    currentTicketFilters.category = document.getElementById('ticketCategoryFilter').value;
+    currentTicketFilters.priority = document.getElementById('ticketPriorityFilter').value;
+    
+    // Remove empty filters
+    Object.keys(currentTicketFilters).forEach(key => {
+        if (currentTicketFilters[key] === '') {
+            delete currentTicketFilters[key];
+        }
+    });
+    
+    loadTickets();
+}
+
+function clearTicketFilters() {
+    document.getElementById('ticketStatusFilter').value = '';
+    document.getElementById('ticketCategoryFilter').value = '';
+    document.getElementById('ticketPriorityFilter').value = '';
+    
+    currentTicketFilters = {};
+    loadTickets();
 }

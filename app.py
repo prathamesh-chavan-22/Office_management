@@ -22,7 +22,11 @@ def create_app():
     
     # Configuration
     app.secret_key = os.environ.get("SESSION_SECRET", "dev-secret-key")
-    app.config["SQLALCHEMY_DATABASE_URI"] = os.environ.get("DATABASE_URL", "sqlite:///hr_system.db")
+    database_url = os.environ.get("DATABASE_URL")
+    if not database_url:
+        # Fallback to SQLite if DATABASE_URL is not set
+        database_url = "sqlite:///hr_system.db"
+    app.config["SQLALCHEMY_DATABASE_URI"] = database_url
     app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {
         "pool_recycle": 300,
         "pool_pre_ping": True,
@@ -120,5 +124,3 @@ def create_app():
             logging.info("Default employee user created: employee1/employee123")
     
     return app
-
-app = create_app()

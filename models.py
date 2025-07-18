@@ -291,3 +291,61 @@ class PerformanceReview(db.Model):
             'created_at': self.created_at.isoformat(),
             'updated_at': self.updated_at.isoformat()
         }
+
+class Ticket(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    title = db.Column(db.String(200), nullable=False)
+    description = db.Column(db.Text, nullable=False)
+    priority = db.Column(db.String(20), default='medium')  # low, medium, high, urgent
+    category = db.Column(db.String(50), nullable=False)  # IT, HR, Facilities, etc.
+    status = db.Column(db.String(20), default='open')  # open, in_progress, closed
+    created_by = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    assigned_to = db.Column(db.Integer, db.ForeignKey('user.id'))
+    attachment_path = db.Column(db.String(255))  # Path to uploaded file
+    attachment_name = db.Column(db.String(255))  # Original filename
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Relationships
+    creator = db.relationship('User', foreign_keys=[created_by], backref='created_tickets')
+    assignee = db.relationship('User', foreign_keys=[assigned_to], backref='assigned_tickets')
+    comments = db.relationship('TicketComment', backref='ticket', lazy=True, cascade='all, delete-orphan')
+    
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'title': self.title,
+            'description': self.description,
+            'priority': self.priority,
+            'category': self.category,
+            'status': self.status,
+            'created_by': self.created_by,
+            'creator_name': f"{self.creator.first_name} {self.creator.last_name}",
+            'assigned_to': self.assigned_to,
+            'assignee_name': f"{self.assignee.first_name} {self.assignee.last_name}" if self.assignee else None,
+            'attachment_path': self.attachment_path,
+            'attachment_name': self.attachment_name,
+            'created_at': self.created_at.isoformat(),
+            'updated_at': self.updated_at.isoformat(),
+            'comments_count': len(self.comments)
+        }
+
+class TicketComment(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    ticket_id = db.Column(db.Integer, db.ForeignKey('ticket.id'), nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    comment_text = db.Column(db.Text, nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    
+    # Relationships
+    author = db.relationship('User', backref='ticket_comments')
+    
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'ticket_id': self.ticket_id,
+            'user_id': self.user_id,
+            'author_name': f"{self.author.first_name} {self.author.last_name}",
+            'comment_text': self.comment_text,
+            'created_at': self.created_at.isoformat()
+        }

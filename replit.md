@@ -142,6 +142,18 @@ The system uses SQLAlchemy models with the following key entities:
 
 ## Recent Changes
 
+### July 18, 2025 - Comprehensive Ticket Management System
+- **Full Ticket System**: Complete support ticket management with all requested API endpoints
+- **Ticket Creation**: Create tickets with title, description, priority, category, and file attachments
+- **Ticket Management**: List, filter, and search tickets with status/priority/category filters
+- **Comments System**: Add comments to tickets with timeline view
+- **File Upload**: Support for multiple file types (PDF, images, documents) up to 16MB
+- **Status Updates**: HR/Admin can update ticket status, priority, and assignments
+- **Role-based Access**: Employees see only their tickets, HR/Admin see all tickets
+- **Statistics Dashboard**: Ticket statistics for HR/Admin users
+- **Professional UI**: Modern ticket interface with priority badges and status indicators
+- **API Endpoints**: All requested endpoints implemented (/tickets/, comments, updates, downloads)
+
 ### July 17, 2025 - Modern Sidebar Navigation UI
 - **UI Redesign**: Converted from top navbar to modern sidebar navigation layout
 - **Sidebar Features**: Fixed sidebar with user info, role-based navigation, and organized menu sections

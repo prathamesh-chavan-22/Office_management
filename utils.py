@@ -64,3 +64,22 @@ def paginate_query(query, page, per_page):
     
     except ValueError:
         return None
+
+def hr_or_admin_required(f):
+    """Decorator to require HR or admin role"""
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        current_user_id = int(get_jwt_identity())
+        user = User.query.get(current_user_id)
+        
+        if not user or user.role not in ['hr', 'admin']:
+            return jsonify({'error': 'HR or admin access required'}), 403
+        
+        return f(*args, **kwargs)
+    
+    return decorated_function
+
+def allowed_file(filename, allowed_extensions):
+    """Check if a file has an allowed extension"""
+    return '.' in filename and \
+           filename.rsplit('.', 1)[1].lower() in allowed_extensions
